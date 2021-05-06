@@ -28,7 +28,7 @@ class Cell {
   constructor(
     public readonly x: number,
     public readonly y: number,
-    public readonly possibles: Set<number>
+    private readonly possibles: Set<number>
   ) {}
 
   isFixed(): boolean {
@@ -46,6 +46,9 @@ class Cell {
     return this.possibles.size === 0;
   }
 
+  getPossibleNumbers(): Set<number> {
+    return new Set(this.possibles);
+  }
   canBe(number: number): boolean {
     return this.possibles.has(number);
   }
@@ -128,11 +131,11 @@ class Board {
     const notFixed = this.cells.filter((cell) => !cell.isFixed());
     // at least 2
     const minimumPossibilities = Math.min(
-      ...notFixed.map((cell) => cell.possibles.size)
+      ...notFixed.map((cell) => cell.getPossibleNumbers().size)
     );
 
     return notFixed.filter(
-      (cell) => cell.possibles.size === minimumPossibilities
+      (cell) => cell.getPossibleNumbers().size === minimumPossibilities
     );
   }
   abduction(x: number, y: number, number: number): Board {
@@ -329,7 +332,7 @@ function solve(board: Board, maxDepth = 3, depth = 1): Result {
     current = result.board;
     const almostFixed = current.almostFixed();
     for (const cellToFix of almostFixed) {
-      for (const possible of cellToFix.possibles) {
+      for (const possible of cellToFix.getPossibleNumbers()) {
         // 仮置きした問題を解く
         const abductionResult = solve(
           current.abduction(cellToFix.x, cellToFix.y, possible),
