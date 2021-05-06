@@ -6,9 +6,9 @@
 
   const board = Board.fromString(inputText);
   console.log(board.toString());
-  const another = Board.fromString(board.toString());
 
-  console.log(Board.equals(board, another));
+  const next = board.next();
+  console.log(next.toString());
 })();
 
 class Cell {
@@ -82,6 +82,10 @@ class Board {
       ret += "\n";
     }
     return ret;
+  }
+
+  next(): Board {
+    return this.clone();
   }
 
   static equals(a: Board, b: Board): boolean {
