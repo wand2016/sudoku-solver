@@ -8,11 +8,11 @@
   console.log("input:");
   console.log(board.toString());
 
-  for (let depth = 1; depth < 10; ++depth) {
+  for (let depth = 1; depth <= 10; ++depth) {
     console.log(`***** depth = ${depth} ****`);
     const result = solve(board, depth);
     if (result.type === "solved") {
-      console.log("solved");
+      console.log("solved!");
       console.log(result.board.toString());
       return;
     }
@@ -21,6 +21,7 @@
       return;
     }
   }
+  console.log("more depth is needed.");
 })();
 
 class Cell {
@@ -113,15 +114,16 @@ class Board {
     return ret;
   }
 
-  progress(): string {
-    return `${this.fixed().length} / 81`;
-  }
-
-  fixed() {
+  /**
+   * 確定したセルを返す
+   */
+  fixed(): Cell[] {
     return this.cells.filter((cell) => cell.isFixed());
   }
 
-  // もう少しで確定しそうなセルを返す
+  /**
+   * もう少しで確定しそうなセルを返す
+   */
   almostFixed(): Cell[] {
     const notFixed = this.cells.filter((cell) => !cell.isFixed());
     // at least 2
@@ -139,21 +141,27 @@ class Board {
     return ret;
   }
 
-  row(y: number) {
-    return this.cells.filter((cell) => cell.y === y);
-  }
-  col(x: number) {
-    return this.cells.filter((cell) => cell.x === x);
-  }
+  /**
+   * 座標指定してセル取得
+   */
   at(x: number, y: number): Cell {
     return this.cells[y * 9 + x];
   }
 
-  block(bx: number, by: number) {
+  /**
+   * ブロックを構成するセルのコレクションを返す
+   * @param bx [0,3)
+   * @param by [0,3)
+   */
+  block(bx: number, by: number): Cell[] {
     return this.cells
       .filter((cell) => Math.floor(cell.x / 3) === bx)
       .filter((cell) => Math.floor(cell.y / 3) === by);
   }
+
+  /**
+   * ブロックのコレクション
+   */
   blocks(): Cell[][] {
     let ret: Cell[][] = [];
     for (let by = 0; by < 3; ++by) {
@@ -164,13 +172,28 @@ class Board {
     return ret;
   }
 
-  sameRow(ref: Cell) {
-    return this.row(ref.y).filter((cell) => cell.x !== ref.x);
+  /**
+   * あるセルと同じ行の他のセル
+   */
+  sameRow(ref: Cell): Cell[] {
+    return this.cells
+      .filter((cell) => cell.y === ref.y)
+      .filter((cell) => cell.x !== ref.x);
   }
-  sameCol(ref: Cell) {
-    return this.col(ref.x).filter((cell) => cell.y !== ref.y);
+
+  /**
+   * あるセルと同じ列の他のセル
+   */
+  sameCol(ref: Cell): Cell[] {
+    return this.cells
+      .filter((cell) => cell.x === ref.x)
+      .filter((cell) => cell.y !== ref.y);
   }
-  sameBlock(ref: Cell) {
+
+  /**
+   * あるセルと同じブロックの他のセル
+   */
+  sameBlock(ref: Cell): Cell[] {
     // 3で割って量子化
     const bx = Math.floor(ref.x / 3);
     const by = Math.floor(ref.y / 3);
@@ -180,29 +203,41 @@ class Board {
     );
   }
 
+  /**
+   * 盤面を進め、セルのとりうる数字の候補を絞り込む
+   */
   next(): Board {
     const ret = this.clone();
 
     // 確定しているセルに対して
     for (const fixedCell of this.fixed()) {
-      // 同じ行消込
-      for (const cell of ret.sameRow(fixedCell)) {
-        cell.remove(fixedCell.fixedValue());
-      }
-      // 同じ列消込
-      for (const cell of ret.sameCol(fixedCell)) {
-        cell.remove(fixedCell.fixedValue());
-      }
-      // 同じブロック消込
-      for (const cell of ret.sameBlock(fixedCell)) {
+      // 同じ行、同じ列、同じブロックのセル消込
+      for (const cell of ret
+        .sameRow(fixedCell)
+        .concat(ret.sameCol(fixedCell))
+        .concat(ret.sameBlock(fixedCell))) {
         cell.remove(fixedCell.fixedValue());
       }
     }
 
-    // ブロックに対して
+    // ブロック内である数字になりうるセルがただ一つ存在すれば、それは確定してよい
+    //
+    // ________1
+    // ____1____
+    // _23______
+    // ...
+    //
+    // こういうケースで
+    //
+    // ________1
+    // ____1____
+    // 123______
+    // ...
+    //
+    // を確定してよい
+    //
     for (const block of ret.blocks()) {
       for (const number of [1, 2, 3, 4, 5, 6, 7, 8, 9]) {
-        // ブロック内である数字になりうるセルがただ一つ存在すれば、それは確定してよい
         const candidates = block.filter((cell) => cell.canBe(number));
         if (candidates.length === 1) {
           candidates[0].fix(number);
@@ -270,26 +305,6 @@ type Result =
       type: "too_deep";
     };
 
-function solveShallow(board: Board): ResultShallow {
-  let current: Board = board.clone();
-  while (true) {
-    if (current.isImpossible()) {
-      return { type: "impossible" };
-    }
-
-    if (current.isSolved()) {
-      return { type: "solved", board: current };
-    }
-
-    const next = current.next();
-    if (Board.equals(current, next)) {
-      return { type: "abduction_needed", board: next };
-    }
-
-    current = next;
-  }
-}
-
 function solve(board: Board, maxDepth = 3, depth = 1): Result {
   // 脱出条件
   if (depth > maxDepth) {
@@ -338,5 +353,25 @@ function solve(board: Board, maxDepth = 3, depth = 1): Result {
       type: "abduction_needed",
       board: current,
     };
+  }
+}
+
+function solveShallow(board: Board): ResultShallow {
+  let current: Board = board.clone();
+  while (true) {
+    if (current.isImpossible()) {
+      return { type: "impossible" };
+    }
+
+    if (current.isSolved()) {
+      return { type: "solved", board: current };
+    }
+
+    const next = current.next();
+    if (Board.equals(current, next)) {
+      return { type: "abduction_needed", board: next };
+    }
+
+    current = next;
   }
 }

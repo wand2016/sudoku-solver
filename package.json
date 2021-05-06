@@ -4,7 +4,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "run": "ts-node index.ts",
+    "solve": "ts-node index.ts",
+    "solve:sample": "npm run solve < sample.txt",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
