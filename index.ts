@@ -4,32 +4,8 @@
   const buffer = Buffer.concat(buffers);
   const inputText = buffer.toString();
 
-  let board = Board.fromString(inputText);
-
-  console.log("solve");
-  while (true) {
-    console.log(board.toString());
-    console.log(board.progress());
-
-    if (board.isImpossible()) {
-      console.log("cannot solve!");
-      break;
-    }
-
-    if (board.isSolved()) {
-      console.log("solved");
-      break;
-    }
-
-    const next = board.next();
-
-    if (Board.equals(board, next)) {
-      console.log("abduction is needed");
-      break;
-    }
-
-    board = next;
-  }
+  const board = Board.fromString(inputText);
+  solve(board);
 })();
 
 class Cell {
@@ -207,4 +183,47 @@ class Board {
 
     return Board.fromChars(chars);
   }
+}
+
+type Result =
+  | {
+      type: "solved";
+      board: Board;
+    }
+  | {
+      type: "impossible";
+    }
+  | {
+      type: "abduction_needed";
+    };
+
+function solveShallow(board: Board): Result {
+  let current: Board = board.clone();
+  while (true) {
+    console.log(current.toString());
+    console.log(current.progress());
+
+    if (current.isImpossible()) {
+      return { type: "impossible" };
+    }
+
+    if (current.isSolved()) {
+      return { type: "solved", board: current };
+    }
+
+    const next = current.next();
+    if (Board.equals(current, next)) {
+      return { type: "abduction_needed" };
+    }
+
+    current = next;
+  }
+}
+
+function solve(board: Board, maxDepth = 3, depth = 1): Result {
+  const result: Result = solveShallow(board);
+
+  console.log(result.type);
+
+  return result;
 }
