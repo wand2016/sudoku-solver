@@ -11,6 +11,11 @@
     console.log(board.toString());
     console.log(board.progress());
 
+    if (board.isImpossible()) {
+      console.log("cannot solve!");
+      break;
+    }
+
     if (board.isSolved()) {
       console.log("solved");
       break;
@@ -19,7 +24,7 @@
     const next = board.next();
 
     if (Board.equals(board, next)) {
-      console.log("cannot solve!");
+      console.log("abduction is needed");
       break;
     }
 
