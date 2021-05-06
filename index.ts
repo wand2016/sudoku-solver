@@ -4,14 +4,21 @@
   const buffer = Buffer.concat(buffers);
   const inputText = buffer.toString();
 
-  const board = Board.fromString(inputText);
-  console.log(board.toString());
-  console.log(board.progress());
+  let board = Board.fromString(inputText);
 
-  const next = board.next();
-  console.log(next);
-  console.log(next.toString());
-  console.log(next.progress());
+  while (!board.isSolved()) {
+    console.log(board.toString());
+    console.log(board.progress());
+
+    const next = board.next();
+
+    if (Board.equals(board, next)) {
+      console.log("cannot solve!");
+      break;
+    }
+
+    board = next;
+  }
 })();
 
 class Cell {
@@ -148,7 +155,7 @@ class Board {
   }
 
   static equals(a: Board, b: Board): boolean {
-    return a.cells.some((cellA, i) => {
+    return a.cells.every((cellA, i) => {
       const cellB = b.cells[i];
       return Cell.equals(cellA, cellB);
     });
