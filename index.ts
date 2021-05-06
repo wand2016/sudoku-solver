@@ -121,7 +121,8 @@ class Board {
     return this.cells.filter((cell) => cell.isFixed());
   }
 
-  almostFixed() {
+  // もう少しで確定しそうなセルを返す
+  almostFixed(): Cell[] {
     const notFixed = this.cells.filter((cell) => !cell.isFixed());
     // at least 2
     const minimumPossibilities = Math.min(
@@ -131,8 +132,6 @@ class Board {
     return notFixed.filter(
       (cell) => cell.possibles.size === minimumPossibilities
     );
-
-    // return notFixed.sort((a, b) => a.possibles.size - b.possibles.size);
   }
   abduction(x: number, y: number, number: number): Board {
     const ret = this.clone();
