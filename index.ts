@@ -6,15 +6,18 @@
 
   const board = Board.fromString(inputText);
   console.log(board.toString());
+  console.log(board.progress());
 
   const next = board.next();
+  console.log(next);
   console.log(next.toString());
+  console.log(next.progress());
 })();
 
 class Cell {
   constructor(
-    private readonly x: number,
-    private readonly y: number,
+    public readonly x: number,
+    public readonly y: number,
     private readonly possibles: Set<number>
   ) {}
 
@@ -22,11 +25,18 @@ class Cell {
     return this.possibles.size === 1;
   }
 
+  fixedValue(): number {
+    if (!this.isFixed()) {
+      throw new Error("not fixed yet");
+    }
+    return [...this.possibles.values()][0];
+  }
+
   isImpossible(): boolean {
     return this.possibles.size === 0;
   }
 
-  reduce(possible: number) {
+  remove(possible: number) {
     this.possibles.delete(possible);
   }
 
@@ -43,11 +53,11 @@ class Cell {
   }
 
   toString(): string {
-    if (this.possibles.size === 0) {
+    if (this.isImpossible()) {
       return "x";
     }
-    if (this.possibles.size === 1) {
-      return this.possibles.values().next().value;
+    if (this.isFixed()) {
+      return this.fixedValue().toString();
     }
     if (this.possibles.size === 9) {
       return "_";
@@ -84,8 +94,57 @@ class Board {
     return ret;
   }
 
+  progress(): string {
+    return `${this.fixed().length} / 81`;
+  }
+
+  fixed() {
+    return this.cells.filter((cell) => cell.isFixed());
+  }
+
+  row(y: number) {
+    return this.cells.filter((cell) => cell.y === y);
+  }
+
+  col(x: number) {
+    return this.cells.filter((cell) => cell.x === x);
+  }
+
+  sameRow(ref: Cell) {
+    return this.row(ref.y).filter((cell) => cell.x !== ref.x);
+  }
+  sameCol(ref: Cell) {
+    return this.col(ref.x).filter((cell) => cell.y !== ref.y);
+  }
+
   next(): Board {
-    return this.clone();
+    const ret = this.clone();
+
+    // 確定してるやつ取得
+    const fixed = this.fixed();
+
+    // 同じ行消込
+    for (const f of fixed) {
+      for (const cell of ret.sameRow(f)) {
+        cell.remove(f.fixedValue());
+      }
+    }
+    // 同じ列消込
+    for (const f of fixed) {
+      for (const cell of ret.sameCol(f)) {
+        cell.remove(f.fixedValue());
+      }
+    }
+
+    return ret;
+  }
+
+  isSolved(): boolean {
+    return this.fixed().length === 81;
+  }
+
+  isImpossible(): boolean {
+    return this.cells.some((cell) => cell.isImpossible());
   }
 
   static equals(a: Board, b: Board): boolean {
