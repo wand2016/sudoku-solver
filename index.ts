@@ -24,54 +24,57 @@
   console.log("more depth is needed.");
 })();
 
+const digits = [1, 2, 3, 4, 5, 6, 7, 8, 9] as const;
+type Digit = typeof digits[number];
+
 class Cell {
   constructor(
     public readonly x: number,
     public readonly y: number,
-    private readonly possibles: Set<number>
+    private readonly possibleDigits: Set<Digit>
   ) {}
 
   isFixed(): boolean {
-    return this.possibles.size === 1;
+    return this.possibleDigits.size === 1;
   }
 
-  fixedValue(): number {
+  fixedDigit(): Digit {
     if (!this.isFixed()) {
       throw new Error("not fixed yet");
     }
-    return [...this.possibles.values()][0];
+    return [...this.possibleDigits.values()][0];
   }
 
   isImpossible(): boolean {
-    return this.possibles.size === 0;
+    return this.possibleDigits.size === 0;
   }
 
-  getPossibleNumbers(): Set<number> {
-    return new Set(this.possibles);
+  getPossibleDigits(): Set<Digit> {
+    return new Set(this.possibleDigits);
   }
-  canBe(number: number): boolean {
-    return this.possibles.has(number);
+  canBe(number: Digit): boolean {
+    return this.possibleDigits.has(number);
   }
-  remove(possible: number) {
-    this.possibles.delete(possible);
+  remove(possible: Digit) {
+    this.possibleDigits.delete(possible);
   }
-  fix(number: number) {
-    if (!this.possibles.has(number)) {
+  fix(number: Digit) {
+    if (!this.possibleDigits.has(number)) {
       throw new Error(`cannot fix to ${number}`);
     }
-    this.possibles.clear();
-    this.possibles.add(number);
+    this.possibleDigits.clear();
+    this.possibleDigits.add(number);
   }
 
   clone(): Cell {
-    return new Cell(this.x, this.y, new Set(this.possibles));
+    return new Cell(this.x, this.y, new Set(this.possibleDigits));
   }
 
   static equals(a: Cell, b: Cell): boolean {
     return (
       a.x === b.x &&
       a.y === b.y &&
-      [...a.possibles].join("") === [...b.possibles].join("")
+      [...a.possibleDigits].join("") === [...b.possibleDigits].join("")
     );
   }
 
@@ -80,19 +83,20 @@ class Cell {
       return "x";
     }
     if (this.isFixed()) {
-      return this.fixedValue().toString();
+      return this.fixedDigit().toString();
     }
-    if (this.possibles.size === 9) {
+    if (this.possibleDigits.size === 9) {
       return "_";
     }
-    return `{${[...this.possibles].join("")}}`;
+    return `{${[...this.possibleDigits].join("")}}`;
   }
   static fromChar(x: number, y: number, ch: string) {
-    if (/^[1-9]$/.test(ch)) {
-      return new Cell(x, y, new Set([Number(ch)]));
-    }
     if (ch === "_") {
       return new Cell(x, y, new Set([1, 2, 3, 4, 5, 6, 7, 8, 9]));
+    }
+
+    if (/^[1-9]$/.test(ch)) {
+      return new Cell(x, y, new Set([Number(ch) as Digit]));
     }
 
     throw new Error(`invalid ch: ${ch}`);
@@ -131,14 +135,14 @@ class Board {
     const notFixed = this.cells.filter((cell) => !cell.isFixed());
     // at least 2
     const minimumPossibilities = Math.min(
-      ...notFixed.map((cell) => cell.getPossibleNumbers().size)
+      ...notFixed.map((cell) => cell.getPossibleDigits().size)
     );
 
     return notFixed.filter(
-      (cell) => cell.getPossibleNumbers().size === minimumPossibilities
+      (cell) => cell.getPossibleDigits().size === minimumPossibilities
     );
   }
-  abduction(x: number, y: number, number: number): Board {
+  abduction(x: number, y: number, number: Digit): Board {
     const ret = this.clone();
     ret.at(x, y).fix(number);
     return ret;
@@ -219,7 +223,7 @@ class Board {
         .sameRow(fixedCell)
         .concat(ret.sameCol(fixedCell))
         .concat(ret.sameBlock(fixedCell))) {
-        cell.remove(fixedCell.fixedValue());
+        cell.remove(fixedCell.fixedDigit());
       }
     }
 
@@ -240,10 +244,10 @@ class Board {
     // を確定してよい
     //
     for (const block of ret.blocks()) {
-      for (const number of [1, 2, 3, 4, 5, 6, 7, 8, 9]) {
-        const candidates = block.filter((cell) => cell.canBe(number));
+      for (const digit of digits) {
+        const candidates = block.filter((cell) => cell.canBe(digit));
         if (candidates.length === 1) {
-          candidates[0].fix(number);
+          candidates[0].fix(digit);
         }
       }
     }
@@ -332,7 +336,7 @@ function solve(board: Board, maxDepth = 3, depth = 1): Result {
     current = result.board;
     const almostFixed = current.almostFixed();
     for (const cellToFix of almostFixed) {
-      for (const possible of cellToFix.getPossibleNumbers()) {
+      for (const possible of cellToFix.getPossibleDigits()) {
         // 仮置きした問題を解く
         const abductionResult = solve(
           current.abduction(cellToFix.x, cellToFix.y, possible),
