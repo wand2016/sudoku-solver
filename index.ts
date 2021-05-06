@@ -6,9 +6,15 @@
 
   let board = Board.fromString(inputText);
 
-  while (!board.isSolved()) {
+  console.log("solve");
+  while (true) {
     console.log(board.toString());
     console.log(board.progress());
+
+    if (board.isSolved()) {
+      console.log("solved");
+      break;
+    }
 
     const next = board.next();
 
@@ -69,7 +75,7 @@ class Cell {
     if (this.possibles.size === 9) {
       return "_";
     }
-    return "?";
+    return `{${[...this.possibles].join("")}}`;
   }
   static fromChar(x: number, y: number, ch: string) {
     if (/^[1-9]$/.test(ch)) {
@@ -117,28 +123,42 @@ class Board {
     return this.cells.filter((cell) => cell.x === x);
   }
 
+  block(x: number, y: number) {
+    // 3で割って量子化
+    const bx = Math.floor(x / 3);
+    const by = Math.floor(y / 3);
+    return this.cells
+      .filter((cell) => Math.floor(cell.x / 3) === bx)
+      .filter((cell) => Math.floor(cell.y / 3) === by);
+  }
+
   sameRow(ref: Cell) {
     return this.row(ref.y).filter((cell) => cell.x !== ref.x);
   }
   sameCol(ref: Cell) {
     return this.col(ref.x).filter((cell) => cell.y !== ref.y);
   }
+  sameBlock(ref: Cell) {
+    return this.block(ref.x, ref.y).filter(
+      (cell) => cell.x !== ref.x || cell.y !== ref.y
+    );
+  }
 
   next(): Board {
     const ret = this.clone();
 
-    // 確定してるやつ取得
-    const fixed = this.fixed();
-
-    // 同じ行消込
-    for (const f of fixed) {
+    // 確定しているブロックに対して
+    for (const f of this.fixed()) {
+      // 同じ行消込
       for (const cell of ret.sameRow(f)) {
         cell.remove(f.fixedValue());
       }
-    }
-    // 同じ列消込
-    for (const f of fixed) {
+      // 同じ列消込
       for (const cell of ret.sameCol(f)) {
+        cell.remove(f.fixedValue());
+      }
+      // 同じブロック消込
+      for (const cell of ret.sameBlock(f)) {
         cell.remove(f.fixedValue());
       }
     }
