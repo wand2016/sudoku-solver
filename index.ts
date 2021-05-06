@@ -5,7 +5,22 @@
   const inputText = buffer.toString();
 
   const board = Board.fromString(inputText);
-  solve(board, 3);
+  console.log("input:");
+  console.log(board.toString());
+
+  for (let depth = 1; depth < 10; ++depth) {
+    console.log(`***** depth = ${depth} ****`);
+    const result = solve(board, depth);
+    if (result.type === "solved") {
+      console.log("solved");
+      console.log(result.board.toString());
+      return;
+    }
+    if (result.type === "impossible") {
+      console.log("cannot to solve");
+      return;
+    }
+  }
 })();
 
 class Cell {
@@ -116,6 +131,8 @@ class Board {
     return notFixed.filter(
       (cell) => cell.possibles.size === minimumPossibilities
     );
+
+    // return notFixed.sort((a, b) => a.possibles.size - b.possibles.size);
   }
   abduction(x: number, y: number, number: number): Board {
     const ret = this.clone();
@@ -235,7 +252,7 @@ class Board {
   }
 }
 
-type Result =
+type ResultShallow =
   | {
       type: "solved";
       board: Board;
@@ -245,17 +262,18 @@ type Result =
     }
   | {
       type: "abduction_needed";
-    }
+      board: Board;
+    };
+
+type Result =
+  | ResultShallow
   | {
       type: "too_deep";
     };
 
-function solveShallow(board: Board): Result {
+function solveShallow(board: Board): ResultShallow {
   let current: Board = board.clone();
   while (true) {
-    console.log(current.toString());
-    console.log(current.progress());
-
     if (current.isImpossible()) {
       return { type: "impossible" };
     }
@@ -266,7 +284,7 @@ function solveShallow(board: Board): Result {
 
     const next = current.next();
     if (Board.equals(current, next)) {
-      return { type: "abduction_needed" };
+      return { type: "abduction_needed", board: next };
     }
 
     current = next;
@@ -283,9 +301,8 @@ function solve(board: Board, maxDepth = 3, depth = 1): Result {
 
   let current = board.clone();
   OUTER: while (true) {
-    const result: Result = solveShallow(current);
+    const result = solveShallow(current);
 
-    console.log(result.type);
     if (result.type === "impossible") {
       return result;
     }
@@ -294,11 +311,12 @@ function solve(board: Board, maxDepth = 3, depth = 1): Result {
     }
 
     // abduction_needed
-    // 仮置きして解なしになれば、その仮置きが間違っているということ
+    // 1つ仮置きして解なしになれば、その仮置きが間違っているということ
+    current = result.board;
     const almostFixed = current.almostFixed();
     for (const cellToFix of almostFixed) {
       for (const possible of cellToFix.possibles) {
-        // 仮置きした問題を再帰的に解く
+        // 仮置きした問題を解く
         const abductionResult = solve(
           current.abduction(cellToFix.x, cellToFix.y, possible),
           maxDepth,
@@ -319,6 +337,7 @@ function solve(board: Board, maxDepth = 3, depth = 1): Result {
     // 深さが足りないとここにくる
     return {
       type: "abduction_needed",
+      board: current,
     };
   }
 }
