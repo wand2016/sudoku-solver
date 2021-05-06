@@ -24,7 +24,7 @@
   console.log("more depth is needed.");
 })();
 
-const digits = [1, 2, 3, 4, 5, 6, 7, 8, 9] as const;
+const digits = ["1", "2", "3", "4", "5", "6", "7", "8", "9"] as const;
 type Digit = typeof digits[number];
 
 class Cell {
@@ -92,11 +92,11 @@ class Cell {
   }
   static fromChar(x: number, y: number, ch: string) {
     if (ch === "_") {
-      return new Cell(x, y, new Set([1, 2, 3, 4, 5, 6, 7, 8, 9]));
+      return new Cell(x, y, new Set(digits));
     }
 
     if (/^[1-9]$/.test(ch)) {
-      return new Cell(x, y, new Set([Number(ch) as Digit]));
+      return new Cell(x, y, new Set([ch as Digit]));
     }
 
     throw new Error(`invalid ch: ${ch}`);
