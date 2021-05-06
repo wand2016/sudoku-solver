@@ -27,10 +27,15 @@
 const digits = ["1", "2", "3", "4", "5", "6", "7", "8", "9"] as const;
 type Digit = typeof digits[number];
 
+const coords = [0, 1, 2, 3, 4, 5, 6, 7, 8] as const;
+type Coord = typeof coords[number];
+const blockCoords = [0, 1, 2];
+type BlockCoord = typeof blockCoords[number];
+
 class Cell {
   constructor(
-    public readonly x: number,
-    public readonly y: number,
+    public readonly x: Coord,
+    public readonly y: Coord,
     private readonly possibleDigits: Set<Digit>
   ) {}
 
@@ -90,7 +95,7 @@ class Cell {
     }
     return `{${[...this.possibleDigits].join("")}}`;
   }
-  static fromChar(x: number, y: number, ch: string) {
+  static fromChar(x: Coord, y: Coord, ch: string) {
     if (ch === "_") {
       return new Cell(x, y, new Set(digits));
     }
@@ -112,8 +117,8 @@ class Board {
 
   toString(): string {
     let ret = "";
-    for (let y = 0; y < 9; ++y) {
-      for (let x = 0; x < 9; ++x) {
+    for (const y of coords) {
+      for (const x of coords) {
         ret += this.at(x, y).toString();
       }
       ret += "\n";
@@ -142,7 +147,7 @@ class Board {
       (cell) => cell.getPossibleDigits().size === minimumPossibilities
     );
   }
-  abduction(x: number, y: number, number: Digit): Board {
+  abduction(x: Coord, y: Coord, number: Digit): Board {
     const ret = this.clone();
     ret.at(x, y).fix(number);
     return ret;
@@ -151,16 +156,14 @@ class Board {
   /**
    * 座標指定してセル取得
    */
-  at(x: number, y: number): Cell {
+  at(x: Coord, y: Coord): Cell {
     return this.cells[y * 9 + x];
   }
 
   /**
    * ブロックを構成するセルのコレクションを返す
-   * @param bx [0,3)
-   * @param by [0,3)
    */
-  block(bx: number, by: number): Cell[] {
+  block(bx: BlockCoord, by: BlockCoord): Cell[] {
     return this.cells
       .filter((cell) => Math.floor(cell.x / 3) === bx)
       .filter((cell) => Math.floor(cell.y / 3) === by);
@@ -171,8 +174,8 @@ class Board {
    */
   blocks(): Cell[][] {
     let ret: Cell[][] = [];
-    for (let by = 0; by < 3; ++by) {
-      for (let bx = 0; bx < 3; ++bx) {
+    for (const by of blockCoords) {
+      for (const bx of blockCoords) {
         ret.push(this.block(bx, by));
       }
     }
@@ -272,8 +275,8 @@ class Board {
 
   static fromChars(chars: string[][]) {
     const cells: Cell[] = [];
-    for (let y = 0; y < 9; ++y) {
-      for (let x = 0; x < 9; ++x) {
+    for (const y of coords) {
+      for (const x of coords) {
         cells.push(Cell.fromChar(x, y, chars[y][x]));
       }
     }
@@ -285,7 +288,7 @@ class Board {
     const lines = string.split("\n");
 
     const chars: string[][] = [];
-    for (let y = 0; y < 9; ++y) {
+    for (const y of coords) {
       chars.push(lines[y].split(""));
     }
 
