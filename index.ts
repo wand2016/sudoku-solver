@@ -30,6 +30,9 @@ class Cell {
     return this.possibles.size === 0;
   }
 
+  canBe(number: number): boolean {
+    return this.possibles.has(number);
+  }
   remove(possible: number) {
     this.possibles.delete(possible);
   }
@@ -130,13 +133,19 @@ class Board {
     return this.cells[y * 9 + x];
   }
 
-  block(x: number, y: number) {
-    // 3で割って量子化
-    const bx = Math.floor(x / 3);
-    const by = Math.floor(y / 3);
+  block(bx: number, by: number) {
     return this.cells
       .filter((cell) => Math.floor(cell.x / 3) === bx)
       .filter((cell) => Math.floor(cell.y / 3) === by);
+  }
+  blocks(): Cell[][] {
+    let ret: Cell[][] = [];
+    for (let by = 0; by < 3; ++by) {
+      for (let bx = 0; bx < 3; ++bx) {
+        ret.push(this.block(bx, by));
+      }
+    }
+    return ret;
   }
 
   sameRow(ref: Cell) {
@@ -146,7 +155,11 @@ class Board {
     return this.col(ref.x).filter((cell) => cell.y !== ref.y);
   }
   sameBlock(ref: Cell) {
-    return this.block(ref.x, ref.y).filter(
+    // 3で割って量子化
+    const bx = Math.floor(ref.x / 3);
+    const by = Math.floor(ref.y / 3);
+
+    return this.block(bx, by).filter(
       (cell) => cell.x !== ref.x || cell.y !== ref.y
     );
   }
@@ -154,19 +167,30 @@ class Board {
   next(): Board {
     const ret = this.clone();
 
-    // 確定しているブロックに対して
-    for (const f of this.fixed()) {
+    // 確定しているセルに対して
+    for (const fixedCell of this.fixed()) {
       // 同じ行消込
-      for (const cell of ret.sameRow(f)) {
-        cell.remove(f.fixedValue());
+      for (const cell of ret.sameRow(fixedCell)) {
+        cell.remove(fixedCell.fixedValue());
       }
       // 同じ列消込
-      for (const cell of ret.sameCol(f)) {
-        cell.remove(f.fixedValue());
+      for (const cell of ret.sameCol(fixedCell)) {
+        cell.remove(fixedCell.fixedValue());
       }
       // 同じブロック消込
-      for (const cell of ret.sameBlock(f)) {
-        cell.remove(f.fixedValue());
+      for (const cell of ret.sameBlock(fixedCell)) {
+        cell.remove(fixedCell.fixedValue());
+      }
+    }
+
+    // ブロックに対して
+    for (const block of ret.blocks()) {
+      for (const number of [1, 2, 3, 4, 5, 6, 7, 8, 9]) {
+        // ブロック内である数字になりうるセルがただ一つ存在すれば、それは確定してよい
+        const candidates = block.filter((cell) => cell.canBe(number));
+        if (candidates.length === 1) {
+          candidates[0].fix(number);
+        }
       }
     }
 
