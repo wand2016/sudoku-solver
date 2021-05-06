@@ -27,15 +27,15 @@
 const digits = ["1", "2", "3", "4", "5", "6", "7", "8", "9"] as const;
 type Digit = typeof digits[number];
 
-const coords = [0, 1, 2, 3, 4, 5, 6, 7, 8] as const;
-type Coord = typeof coords[number];
+const cellCoords = [0, 1, 2, 3, 4, 5, 6, 7, 8] as const;
+type CellCoord = typeof cellCoords[number];
 const blockCoords = [0, 1, 2];
 type BlockCoord = typeof blockCoords[number];
 
 class Cell {
   constructor(
-    public readonly x: Coord,
-    public readonly y: Coord,
+    public readonly x: CellCoord,
+    public readonly y: CellCoord,
     private readonly possibleDigits: Set<Digit>
   ) {}
 
@@ -95,7 +95,7 @@ class Cell {
     }
     return `{${[...this.possibleDigits].join("")}}`;
   }
-  static fromChar(x: Coord, y: Coord, ch: string) {
+  static fromChar(x: CellCoord, y: CellCoord, ch: string) {
     if (ch === "_") {
       return new Cell(x, y, new Set(digits));
     }
@@ -117,8 +117,8 @@ class Board {
 
   toString(): string {
     let ret = "";
-    for (const y of coords) {
-      for (const x of coords) {
+    for (const y of cellCoords) {
+      for (const x of cellCoords) {
         ret += this.at(x, y).toString();
       }
       ret += "\n";
@@ -147,7 +147,7 @@ class Board {
       (cell) => cell.getPossibleDigits().size === minimumPossibilities
     );
   }
-  abduction(x: Coord, y: Coord, number: Digit): Board {
+  abduction(x: CellCoord, y: CellCoord, number: Digit): Board {
     const ret = this.clone();
     ret.at(x, y).fix(number);
     return ret;
@@ -156,7 +156,7 @@ class Board {
   /**
    * 座標指定してセル取得
    */
-  at(x: Coord, y: Coord): Cell {
+  at(x: CellCoord, y: CellCoord): Cell {
     return this.cells[y * 9 + x];
   }
 
@@ -273,26 +273,17 @@ class Board {
     });
   }
 
-  static fromChars(chars: string[][]) {
+  static fromString(string: string): Board {
     const cells: Cell[] = [];
-    for (const y of coords) {
-      for (const x of coords) {
-        cells.push(Cell.fromChar(x, y, chars[y][x]));
+
+    const lines = string.split("\n");
+    for (const y of cellCoords) {
+      for (const x of cellCoords) {
+        cells.push(Cell.fromChar(x, y, lines[y][x]));
       }
     }
 
     return new Board(cells);
-  }
-
-  static fromString(string: string) {
-    const lines = string.split("\n");
-
-    const chars: string[][] = [];
-    for (const y of coords) {
-      chars.push(lines[y].split(""));
-    }
-
-    return Board.fromChars(chars);
   }
 }
 
