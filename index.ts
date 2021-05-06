@@ -5,14 +5,14 @@
   const inputText = buffer.toString();
 
   const board = Board.fromString(inputText);
-  solve(board);
+  solve(board, 3);
 })();
 
 class Cell {
   constructor(
     public readonly x: number,
     public readonly y: number,
-    private readonly possibles: Set<number>
+    public readonly possibles: Set<number>
   ) {}
 
   isFixed(): boolean {
@@ -32,6 +32,13 @@ class Cell {
 
   remove(possible: number) {
     this.possibles.delete(possible);
+  }
+  fix(number: number) {
+    if (!this.possibles.has(number)) {
+      throw new Error(`cannot fix to ${number}`);
+    }
+    this.possibles.clear();
+    this.possibles.add(number);
   }
 
   clone(): Cell {
@@ -81,7 +88,7 @@ class Board {
     let ret = "";
     for (let y = 0; y < 9; ++y) {
       for (let x = 0; x < 9; ++x) {
-        ret += this.cells[y * 9 + x].toString();
+        ret += this.at(x, y).toString();
       }
       ret += "\n";
     }
@@ -96,12 +103,31 @@ class Board {
     return this.cells.filter((cell) => cell.isFixed());
   }
 
+  almostFixed() {
+    const notFixed = this.cells.filter((cell) => !cell.isFixed());
+    // at least 2
+    const minimumPossibilities = Math.min(
+      ...notFixed.map((cell) => cell.possibles.size)
+    );
+
+    return notFixed.filter(
+      (cell) => cell.possibles.size === minimumPossibilities
+    );
+  }
+  abduction(x: number, y: number, number: number): Board {
+    const ret = this.clone();
+    ret.at(x, y).fix(number);
+    return ret;
+  }
+
   row(y: number) {
     return this.cells.filter((cell) => cell.y === y);
   }
-
   col(x: number) {
     return this.cells.filter((cell) => cell.x === x);
+  }
+  at(x: number, y: number): Cell {
+    return this.cells[y * 9 + x];
   }
 
   block(x: number, y: number) {
@@ -195,6 +221,9 @@ type Result =
     }
   | {
       type: "abduction_needed";
+    }
+  | {
+      type: "too_deep";
     };
 
 function solveShallow(board: Board): Result {
@@ -221,9 +250,51 @@ function solveShallow(board: Board): Result {
 }
 
 function solve(board: Board, maxDepth = 3, depth = 1): Result {
-  const result: Result = solveShallow(board);
+  // 脱出条件
+  if (depth > maxDepth) {
+    return {
+      type: "too_deep",
+    };
+  }
 
-  console.log(result.type);
+  let current = board.clone();
+  OUTER: while (true) {
+    const result: Result = solveShallow(current);
 
-  return result;
+    console.log(result.type);
+    if (result.type === "impossible") {
+      return result;
+    }
+    if (result.type === "solved") {
+      return result;
+    }
+
+    // abduction_needed
+    // 仮置きして解なしになれば、その仮置きが間違っているということ
+    const almostFixed = current.almostFixed();
+    for (const cellToFix of almostFixed) {
+      for (const possible of cellToFix.possibles) {
+        // 仮置きした問題を再帰的に解く
+        const abductionResult = solve(
+          current.abduction(cellToFix.x, cellToFix.y, possible),
+          maxDepth,
+          depth + 1
+        );
+        // 解けちゃったらそれはそれでよし
+        if (abductionResult.type === "solved") {
+          return abductionResult;
+        }
+        // 仮置きして解なしになったら、その仮置きを候補から外して仕切り直し
+        if (abductionResult.type === "impossible") {
+          current.at(cellToFix.x, cellToFix.y).remove(possible);
+          continue OUTER;
+        }
+      }
+    }
+
+    // 深さが足りないとここにくる
+    return {
+      type: "abduction_needed",
+    };
+  }
 }
