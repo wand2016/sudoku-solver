@@ -375,13 +375,6 @@ type Result =
     };
 
 function solve(board: Board, maxDepth = 3, depth = 1): Result {
-  // 脱出条件
-  if (depth > maxDepth) {
-    return {
-      type: "too_deep",
-    };
-  }
-
   let current = board.clone();
   OUTER: while (true) {
     const result = solveShallow(current);
@@ -395,6 +388,14 @@ function solve(board: Board, maxDepth = 3, depth = 1): Result {
 
     // abduction_needed
     // 1つ仮置きして解なしになれば、その仮置きが間違っているということ
+
+    // 深さ最大なら脱出
+    if (depth === maxDepth) {
+      return {
+        type: "too_deep",
+      };
+    }
+
     current = result.board;
     const almostFixed = current.almostFixed();
     for (const cellToFix of almostFixed) {
