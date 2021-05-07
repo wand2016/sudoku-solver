@@ -146,6 +146,17 @@ var __values = (this && this.__values) || function(o) {
     });
 }); })();
 var digits = [1, 2, 3, 4, 5, 6, 7, 8, 9];
+var digitBits = [
+    1 << 0,
+    1 << 1,
+    1 << 2,
+    1 << 3,
+    1 << 4,
+    1 << 5,
+    1 << 6,
+    1 << 7,
+    1 << 8,
+];
 var cellCoords = [0, 1, 2, 3, 4, 5, 6, 7, 8];
 var blockCoords = [0, 1, 2];
 var Cell = /** @class */ (function () {
@@ -155,59 +166,59 @@ var Cell = /** @class */ (function () {
         this.possibleDigits = possibleDigits;
     }
     Cell.prototype.isFixed = function () {
-        return this.possibleDigits.size === 1;
+        return digitBits.includes(this.possibleDigits);
     };
-    Cell.prototype.fixedDigit = function () {
+    Cell.prototype.fixedDigitBit = function () {
         if (!this.isFixed()) {
             throw new Error("not fixed yet");
         }
-        return __spreadArray([], __read(this.possibleDigits.values()))[0];
+        return this.possibleDigits;
     };
     Cell.prototype.isImpossible = function () {
-        return this.possibleDigits.size === 0;
+        return this.possibleDigits === 0;
     };
-    Cell.prototype.getPossibleDigits = function () {
-        return new Set(this.possibleDigits);
+    Cell.prototype.getPossibleDigitBits = function () {
+        var _this = this;
+        return digitBits
+            .map(function (digitBit) { return digitBit & _this.possibleDigits; })
+            .filter(function (extracted) { return extracted !== 0; });
     };
-    Cell.prototype.canBe = function (number) {
-        return this.possibleDigits.has(number);
+    Cell.prototype.canBe = function (bit) {
+        return (this.possibleDigits & bit) !== 0;
     };
-    Cell.prototype.remove = function (possible) {
-        this.possibleDigits.delete(possible);
+    Cell.prototype.removeBit = function (bit) {
+        this.possibleDigits &= ~bit;
     };
-    Cell.prototype.fix = function (number) {
-        if (!this.possibleDigits.has(number)) {
-            throw new Error("cannot fix to " + number);
-        }
-        this.possibleDigits.clear();
-        this.possibleDigits.add(number);
+    Cell.prototype.fixBit = function (bit) {
+        this.possibleDigits = bit;
     };
     Cell.prototype.clone = function () {
-        return new Cell(this.x, this.y, new Set(this.possibleDigits));
+        return new Cell(this.x, this.y, this.possibleDigits);
     };
     Cell.equals = function (a, b) {
-        return (a.x === b.x &&
-            a.y === b.y &&
-            __spreadArray([], __read(a.possibleDigits)).join("") === __spreadArray([], __read(b.possibleDigits)).join(""));
+        return a.x === b.x && a.y === b.y && a.possibleDigits === b.possibleDigits;
     };
     Cell.prototype.toString = function () {
         if (this.isImpossible()) {
             return "x";
         }
         if (this.isFixed()) {
-            return this.fixedDigit().toString();
+            return Math.floor(Math.log2(this.fixedDigitBit()) + 1).toString();
         }
-        if (this.possibleDigits.size === 9) {
+        if (this.possibleDigits === 511) {
             return "_";
         }
-        return "{" + __spreadArray([], __read(this.possibleDigits)).join("") + "}";
+        // return "?";
+        return "{" + __spreadArray([], __read(this.getPossibleDigitBits().map(function (bit) {
+            return Math.floor(Math.log2(bit) + 1);
+        }))).join("") + "}";
     };
     Cell.fromChar = function (x, y, ch) {
         if (ch === "_") {
-            return new Cell(x, y, new Set(digits));
+            return new Cell(x, y, 511);
         }
         if (/^[1-9]$/.test(ch)) {
-            return new Cell(x, y, new Set([Number(ch)]));
+            return new Cell(x, y, 1 << (Number(ch) - 1));
         }
         throw new Error("invalid ch: " + ch);
     };
@@ -270,12 +281,12 @@ var Board = /** @class */ (function () {
     Board.prototype.almostFixed = function () {
         var notFixed = this.cells.filter(function (cell) { return !cell.isFixed(); });
         // at least 2
-        var minimumPossibilities = Math.min.apply(Math, __spreadArray([], __read(notFixed.map(function (cell) { return cell.getPossibleDigits().size; }))));
-        return notFixed.filter(function (cell) { return cell.getPossibleDigits().size === minimumPossibilities; });
+        var minimumPossibilities = Math.min.apply(Math, __spreadArray([], __read(notFixed.map(function (cell) { return cell.getPossibleDigitBits().length; }))));
+        return notFixed.filter(function (cell) { return cell.getPossibleDigitBits().length === minimumPossibilities; });
     };
-    Board.prototype.abduction = function (x, y, number) {
+    Board.prototype.abduction = function (x, y, bit) {
         var ret = this.clone();
-        ret.at(x, y).fix(number);
+        ret.at(x, y).fixBit(bit);
         return ret;
     };
     Board.prototype.rows = function (y) {
@@ -374,12 +385,12 @@ var Board = /** @class */ (function () {
             // 確定しているセルに対して
             for (var _g = __values(this.fixed()), _h = _g.next(); !_h.done; _h = _g.next()) {
                 var fixedCell = _h.value;
-                var fixedDigit = fixedCell.fixedDigit();
+                var fixedDigitBit = fixedCell.fixedDigitBit();
                 try {
                     // 同じ行、同じ列、同じブロックのセル消込
                     for (var _j = (e_7 = void 0, __values(ret.sameRow(fixedCell))), _k = _j.next(); !_k.done; _k = _j.next()) {
                         var cell = _k.value;
-                        cell.remove(fixedDigit);
+                        cell.removeBit(fixedDigitBit);
                     }
                 }
                 catch (e_7_1) { e_7 = { error: e_7_1 }; }
@@ -392,7 +403,7 @@ var Board = /** @class */ (function () {
                 try {
                     for (var _l = (e_8 = void 0, __values(ret.sameCol(fixedCell))), _m = _l.next(); !_m.done; _m = _l.next()) {
                         var cell = _m.value;
-                        cell.remove(fixedDigit);
+                        cell.removeBit(fixedDigitBit);
                     }
                 }
                 catch (e_8_1) { e_8 = { error: e_8_1 }; }
@@ -405,7 +416,7 @@ var Board = /** @class */ (function () {
                 try {
                     for (var _o = (e_9 = void 0, __values(ret.sameBlock(fixedCell))), _p = _o.next(); !_p.done; _p = _o.next()) {
                         var cell = _p.value;
-                        cell.remove(fixedDigit);
+                        cell.removeBit(fixedDigitBit);
                     }
                 }
                 catch (e_9_1) { e_9 = { error: e_9_1 }; }
@@ -443,22 +454,22 @@ var Board = /** @class */ (function () {
             //
             for (var _q = __values(ret.blocks()), _r = _q.next(); !_r.done; _r = _q.next()) {
                 var block = _r.value;
-                var _loop_1 = function (digit) {
-                    var candidates = block.filter(function (cell) { return cell.canBe(digit); });
+                var _loop_1 = function (digitBit) {
+                    var candidates = block.filter(function (cell) { return cell.canBe(digitBit); });
                     if (candidates.length === 1) {
-                        candidates[0].fix(digit);
+                        candidates[0].fixBit(digitBit);
                     }
                 };
                 try {
-                    for (var digits_1 = (e_11 = void 0, __values(digits)), digits_1_1 = digits_1.next(); !digits_1_1.done; digits_1_1 = digits_1.next()) {
-                        var digit = digits_1_1.value;
-                        _loop_1(digit);
+                    for (var digitBits_1 = (e_11 = void 0, __values(digitBits)), digitBits_1_1 = digitBits_1.next(); !digitBits_1_1.done; digitBits_1_1 = digitBits_1.next()) {
+                        var digitBit = digitBits_1_1.value;
+                        _loop_1(digitBit);
                     }
                 }
                 catch (e_11_1) { e_11 = { error: e_11_1 }; }
                 finally {
                     try {
-                        if (digits_1_1 && !digits_1_1.done && (_f = digits_1.return)) _f.call(digits_1);
+                        if (digitBits_1_1 && !digitBits_1_1.done && (_f = digitBits_1.return)) _f.call(digitBits_1);
                     }
                     finally { if (e_11) throw e_11.error; }
                 }
@@ -522,12 +533,6 @@ function solve(board, maxDepth, depth) {
     var e_14, _a, e_15, _b;
     if (maxDepth === void 0) { maxDepth = 3; }
     if (depth === void 0) { depth = 1; }
-    // 脱出条件
-    if (depth > maxDepth) {
-        return {
-            type: "too_deep",
-        };
-    }
     var current = board.clone();
     OUTER: while (true) {
         var result = solveShallow(current);
@@ -539,23 +544,29 @@ function solve(board, maxDepth, depth) {
         }
         // abduction_needed
         // 1つ仮置きして解なしになれば、その仮置きが間違っているということ
+        // 深さ最大なら脱出
+        if (depth === maxDepth) {
+            return {
+                type: "too_deep",
+            };
+        }
         current = result.board;
         var almostFixed = current.almostFixed();
         try {
             for (var almostFixed_1 = (e_14 = void 0, __values(almostFixed)), almostFixed_1_1 = almostFixed_1.next(); !almostFixed_1_1.done; almostFixed_1_1 = almostFixed_1.next()) {
                 var cellToFix = almostFixed_1_1.value;
                 try {
-                    for (var _c = (e_15 = void 0, __values(cellToFix.getPossibleDigits())), _d = _c.next(); !_d.done; _d = _c.next()) {
-                        var possible = _d.value;
+                    for (var _c = (e_15 = void 0, __values(cellToFix.getPossibleDigitBits())), _d = _c.next(); !_d.done; _d = _c.next()) {
+                        var possibleBit = _d.value;
                         // 仮置きした問題を解く
-                        var abductionResult = solve(current.abduction(cellToFix.x, cellToFix.y, possible), maxDepth, depth + 1);
+                        var abductionResult = solve(current.abduction(cellToFix.x, cellToFix.y, possibleBit), maxDepth, depth + 1);
                         // 解けちゃったらそれはそれでよし
                         if (abductionResult.type === "solved") {
                             return abductionResult;
                         }
                         // 仮置きして解なしになったら、その仮置きを候補から外して仕切り直し
                         if (abductionResult.type === "impossible") {
-                            current.at(cellToFix.x, cellToFix.y).remove(possible);
+                            current.at(cellToFix.x, cellToFix.y).removeBit(possibleBit);
                             continue OUTER;
                         }
                     }

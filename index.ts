@@ -39,60 +39,68 @@
 const digits = [1, 2, 3, 4, 5, 6, 7, 8, 9] as const;
 type Digit = typeof digits[number];
 
+const digitBits = [
+  1 << 0,
+  1 << 1,
+  1 << 2,
+  1 << 3,
+  1 << 4,
+  1 << 5,
+  1 << 6,
+  1 << 7,
+  1 << 8,
+] as const;
+
 const cellCoords = [0, 1, 2, 3, 4, 5, 6, 7, 8] as const;
 type CellCoord = typeof cellCoords[number];
 const blockCoords = [0, 1, 2];
 type BlockCoord = typeof blockCoords[number];
 
+type BitMap = number;
+
 class Cell {
   constructor(
     public readonly x: CellCoord,
     public readonly y: CellCoord,
-    private readonly possibleDigits: Set<Digit>
+    private possibleDigits: BitMap
   ) {}
 
   isFixed(): boolean {
-    return this.possibleDigits.size === 1;
+    return digitBits.includes(this.possibleDigits);
   }
 
-  fixedDigit(): Digit {
+  fixedDigitBit(): number {
     if (!this.isFixed()) {
       throw new Error("not fixed yet");
     }
-    return [...this.possibleDigits.values()][0];
+    return this.possibleDigits;
   }
 
   isImpossible(): boolean {
-    return this.possibleDigits.size === 0;
+    return this.possibleDigits === 0;
   }
 
-  getPossibleDigits(): Set<Digit> {
-    return new Set(this.possibleDigits);
+  getPossibleDigitBits(): number[] {
+    return digitBits
+      .map((digitBit) => digitBit & this.possibleDigits)
+      .filter((extracted) => extracted !== 0);
   }
-  canBe(number: Digit): boolean {
-    return this.possibleDigits.has(number);
+  canBe(bit: number): boolean {
+    return (this.possibleDigits & bit) !== 0;
   }
-  remove(possible: Digit) {
-    this.possibleDigits.delete(possible);
+  removeBit(bit: number) {
+    this.possibleDigits &= ~bit;
   }
-  fix(number: Digit) {
-    if (!this.possibleDigits.has(number)) {
-      throw new Error(`cannot fix to ${number}`);
-    }
-    this.possibleDigits.clear();
-    this.possibleDigits.add(number);
+  fixBit(bit: number) {
+    this.possibleDigits = bit;
   }
 
   clone(): Cell {
-    return new Cell(this.x, this.y, new Set(this.possibleDigits));
+    return new Cell(this.x, this.y, this.possibleDigits);
   }
 
   static equals(a: Cell, b: Cell): boolean {
-    return (
-      a.x === b.x &&
-      a.y === b.y &&
-      [...a.possibleDigits].join("") === [...b.possibleDigits].join("")
-    );
+    return a.x === b.x && a.y === b.y && a.possibleDigits === b.possibleDigits;
   }
 
   toString(): string {
@@ -100,20 +108,25 @@ class Cell {
       return "x";
     }
     if (this.isFixed()) {
-      return this.fixedDigit().toString();
+      return Math.floor(Math.log2(this.fixedDigitBit()) + 1).toString();
     }
-    if (this.possibleDigits.size === 9) {
+    if (this.possibleDigits === 0b111111111) {
       return "_";
     }
-    return `{${[...this.possibleDigits].join("")}}`;
+    // return "?";
+    return `{${[
+      ...this.getPossibleDigitBits().map((bit) =>
+        Math.floor(Math.log2(bit) + 1)
+      ),
+    ].join("")}}`;
   }
   static fromChar(x: CellCoord, y: CellCoord, ch: string) {
     if (ch === "_") {
-      return new Cell(x, y, new Set(digits));
+      return new Cell(x, y, 0b111111111);
     }
 
     if (/^[1-9]$/.test(ch)) {
-      return new Cell(x, y, new Set([Number(ch) as Digit]));
+      return new Cell(x, y, 1 << (Number(ch) - 1));
     }
 
     throw new Error(`invalid ch: ${ch}`);
@@ -167,16 +180,16 @@ class Board {
     const notFixed = this.cells.filter((cell) => !cell.isFixed());
     // at least 2
     const minimumPossibilities = Math.min(
-      ...notFixed.map((cell) => cell.getPossibleDigits().size)
+      ...notFixed.map((cell) => cell.getPossibleDigitBits().length)
     );
 
     return notFixed.filter(
-      (cell) => cell.getPossibleDigits().size === minimumPossibilities
+      (cell) => cell.getPossibleDigitBits().length === minimumPossibilities
     );
   }
-  abduction(x: CellCoord, y: CellCoord, number: Digit): Board {
+  abduction(x: CellCoord, y: CellCoord, bit: number): Board {
     const ret = this.clone();
-    ret.at(x, y).fix(number);
+    ret.at(x, y).fixBit(bit);
     return ret;
   }
 
@@ -281,16 +294,16 @@ class Board {
 
     // 確定しているセルに対して
     for (const fixedCell of this.fixed()) {
-      const fixedDigit = fixedCell.fixedDigit();
+      const fixedDigitBit = fixedCell.fixedDigitBit();
       // 同じ行、同じ列、同じブロックのセル消込
       for (const cell of ret.sameRow(fixedCell)) {
-        cell.remove(fixedDigit);
+        cell.removeBit(fixedDigitBit);
       }
       for (const cell of ret.sameCol(fixedCell)) {
-        cell.remove(fixedDigit);
+        cell.removeBit(fixedDigitBit);
       }
       for (const cell of ret.sameBlock(fixedCell)) {
-        cell.remove(fixedDigit);
+        cell.removeBit(fixedDigitBit);
       }
     }
 
@@ -311,10 +324,10 @@ class Board {
     // を確定してよい
     //
     for (const block of ret.blocks()) {
-      for (const digit of digits) {
-        const candidates = block.filter((cell) => cell.canBe(digit));
+      for (const digitBit of digitBits) {
+        const candidates = block.filter((cell) => cell.canBe(digitBit));
         if (candidates.length === 1) {
-          candidates[0].fix(digit);
+          candidates[0].fixBit(digitBit);
         }
       }
     }
@@ -399,10 +412,10 @@ function solve(board: Board, maxDepth = 3, depth = 1): Result {
     current = result.board;
     const almostFixed = current.almostFixed();
     for (const cellToFix of almostFixed) {
-      for (const possible of cellToFix.getPossibleDigits()) {
+      for (const possibleBit of cellToFix.getPossibleDigitBits()) {
         // 仮置きした問題を解く
         const abductionResult = solve(
-          current.abduction(cellToFix.x, cellToFix.y, possible),
+          current.abduction(cellToFix.x, cellToFix.y, possibleBit),
           maxDepth,
           depth + 1
         );
@@ -412,7 +425,7 @@ function solve(board: Board, maxDepth = 3, depth = 1): Result {
         }
         // 仮置きして解なしになったら、その仮置きを候補から外して仕切り直し
         if (abductionResult.type === "impossible") {
-          current.at(cellToFix.x, cellToFix.y).remove(possible);
+          current.at(cellToFix.x, cellToFix.y).removeBit(possibleBit);
           continue OUTER;
         }
       }
