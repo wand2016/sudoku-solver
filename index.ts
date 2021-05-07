@@ -4,27 +4,39 @@
   const buffer = Buffer.concat(buffers);
   const inputText = buffer.toString();
 
+  console.time("sudoku");
+
   const board = Board.fromString(inputText);
   console.log("input:");
   console.log(board.toString());
 
+  let current = board.clone();
   for (let depth = 1; depth <= 10; ++depth) {
     console.log(`***** depth = ${depth} ****`);
-    const result = solve(board, depth);
+    const result = solve(current, depth);
     if (result.type === "solved") {
       console.log("solved!");
       console.log(result.board.toString());
+      console.timeEnd("sudoku");
       return;
     }
     if (result.type === "impossible") {
       console.log("cannot to solve");
+      console.timeEnd("sudoku");
       return;
+    }
+    // より深く仮置きしないと解けない場合
+    // その場合でも、「ここに置くと詰む」という知識は得られたので、反映する
+    if (result.type === "more_depth_needed") {
+      current = result.board;
+      console.log(current.toString());
+      continue;
     }
   }
   console.log("more depth is needed.");
 })();
 
-const digits = ["1", "2", "3", "4", "5", "6", "7", "8", "9"] as const;
+const digits = [1, 2, 3, 4, 5, 6, 7, 8, 9] as const;
 type Digit = typeof digits[number];
 
 const cellCoords = [0, 1, 2, 3, 4, 5, 6, 7, 8] as const;
@@ -101,7 +113,7 @@ class Cell {
     }
 
     if (/^[1-9]$/.test(ch)) {
-      return new Cell(x, y, new Set([ch as Digit]));
+      return new Cell(x, y, new Set([Number(ch) as Digit]));
     }
 
     throw new Error(`invalid ch: ${ch}`);
@@ -109,7 +121,22 @@ class Cell {
 }
 
 class Board {
-  constructor(private readonly cells: Cell[]) {}
+  private readonly rowMemo: Cell[][];
+  private readonly colMemo: Cell[][];
+  private readonly blockMemo: Cell[][];
+  private blocksMemo: Cell[][] | null = null;
+  private readonly sameRowMemo: Cell[][];
+  private readonly sameColMemo: Cell[][];
+  private readonly sameBlockMemo: Cell[][];
+
+  constructor(private readonly cells: Cell[]) {
+    this.rowMemo = Array(9);
+    this.colMemo = Array(9);
+    this.blockMemo = Array(9);
+    this.sameRowMemo = Array(9);
+    this.sameColMemo = Array(9);
+    this.sameBlockMemo = Array(9);
+  }
 
   clone(): Board {
     return new Board(this.cells.map((cell) => cell.clone()));
@@ -153,64 +180,97 @@ class Board {
     return ret;
   }
 
+  rows(y: CellCoord): Cell[] {
+    return (
+      this.rowMemo[y] ||
+      (this.rowMemo[y] = this.cells.filter((cell) => cell.y === y))
+    );
+  }
+
+  cols(x: CellCoord): Cell[] {
+    return (
+      this.colMemo[x] ||
+      (this.colMemo[x] = this.cells.filter((cell) => cell.x === x))
+    );
+  }
+
   /**
    * 座標指定してセル取得
    */
   at(x: CellCoord, y: CellCoord): Cell {
-    return this.cells[y * 9 + x];
+    return this.rows(y)[x];
   }
 
   /**
    * ブロックを構成するセルのコレクションを返す
    */
   block(bx: BlockCoord, by: BlockCoord): Cell[] {
-    return this.cells
-      .filter((cell) => Math.floor(cell.x / 3) === bx)
-      .filter((cell) => Math.floor(cell.y / 3) === by);
+    return (
+      this.blockMemo[by * 3 + bx] ||
+      (this.blockMemo[by * 3 + bx] = this.cells
+        .filter((cell) => Math.floor(cell.x / 3) === bx)
+        .filter((cell) => Math.floor(cell.y / 3) === by))
+    );
   }
 
   /**
    * ブロックのコレクション
    */
   blocks(): Cell[][] {
-    let ret: Cell[][] = [];
+    if (this.blocksMemo) {
+      return this.blocksMemo;
+    }
+
+    const ret: Cell[][] = [];
     for (const by of blockCoords) {
       for (const bx of blockCoords) {
         ret.push(this.block(bx, by));
       }
     }
-    return ret;
+
+    return (this.blocksMemo = ret);
   }
 
   /**
    * あるセルと同じ行の他のセル
    */
   sameRow(ref: Cell): Cell[] {
-    return this.cells
-      .filter((cell) => cell.y === ref.y)
-      .filter((cell) => cell.x !== ref.x);
+    return (
+      this.sameRowMemo[ref.y * 9 + ref.x] ||
+      (this.sameRowMemo[ref.y * 9 + ref.x] = this.rows(ref.y).filter(
+        (cell) => cell.x !== ref.x
+      ))
+    );
   }
 
   /**
    * あるセルと同じ列の他のセル
    */
   sameCol(ref: Cell): Cell[] {
-    return this.cells
-      .filter((cell) => cell.x === ref.x)
-      .filter((cell) => cell.y !== ref.y);
+    return (
+      this.sameColMemo[ref.y * 9 + ref.x] ||
+      (this.sameColMemo[ref.y * 9 + ref.x] = this.cols(ref.x).filter(
+        (cell) => cell.y !== ref.y
+      ))
+    );
   }
 
   /**
    * あるセルと同じブロックの他のセル
    */
   sameBlock(ref: Cell): Cell[] {
+    const memo = this.sameBlockMemo[ref.y * 9 + ref.x];
+    if (memo) {
+      return memo;
+    }
+
     // 3で割って量子化
     const bx = Math.floor(ref.x / 3);
     const by = Math.floor(ref.y / 3);
 
-    return this.block(bx, by).filter(
+    return (this.sameBlockMemo[ref.y * 9 + ref.x] = this.block(bx, by).filter(
       (cell) => cell.x !== ref.x || cell.y !== ref.y
-    );
+    ));
   }
 
   /**
@@ -221,12 +281,16 @@ class Board {
 
     // 確定しているセルに対して
     for (const fixedCell of this.fixed()) {
+      const fixedDigit = fixedCell.fixedDigit();
       // 同じ行、同じ列、同じブロックのセル消込
-      for (const cell of ret
-        .sameRow(fixedCell)
-        .concat(ret.sameCol(fixedCell))
-        .concat(ret.sameBlock(fixedCell))) {
-        cell.remove(fixedCell.fixedDigit());
+      for (const cell of ret.sameRow(fixedCell)) {
+        cell.remove(fixedDigit);
+      }
+      for (const cell of ret.sameCol(fixedCell)) {
+        cell.remove(fixedDigit);
+      }
+      for (const cell of ret.sameBlock(fixedCell)) {
+        cell.remove(fixedDigit);
       }
     }
 
@@ -259,7 +323,7 @@ class Board {
   }
 
   isSolved(): boolean {
-    return this.fixed().length === 81;
+    return this.cells.every((cell) => cell.isFixed());
   }
 
   isImpossible(): boolean {
@@ -304,6 +368,10 @@ type Result =
   | ResultShallow
   | {
       type: "too_deep";
+    }
+  | {
+      type: "more_depth_needed";
+      board: Board;
     };
 
 function solve(board: Board, maxDepth = 3, depth = 1): Result {
@@ -351,7 +419,7 @@ function solve(board: Board, maxDepth = 3, depth = 1): Result {
 
     // 深さが足りないとここにくる
     return {
-      type: "abduction_needed",
+      type: "more_depth_needed",
       board: current,
     };
   }
